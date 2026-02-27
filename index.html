@@ -1,0 +1,177 @@
+import tkinter as tk
+import cv2
+import mediapipe as mp
+import pyautogui
+from PIL import Image
+
+# Button 1: Hand Volume Control
+def button1_click():
+    print('Hand Volume Control Activated')
+    cap = cv2.VideoCapture(0)
+    hands = mp.solutions.hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
+    draw = mp.solutions.drawing_utils
+
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            break
+
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = hands.process(rgb)
+
+        if result.multi_hand_landmarks:
+            for hand_landmarks in result.multi_hand_landmarks:
+                draw.draw_landmarks(frame, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                thumb = hand_landmarks.landmark[4]
+                index = hand_landmarks.landmark[8]
+
+                x1, y1 = int(index.x * w), int(index.y * h)
+                x2, y2 = int(thumb.x * w), int(thumb.y * h)
+
+                cv2.circle(frame, (x1, y1), 8, (0, 255, 255), -1)
+                cv2.circle(frame, (x2, y2), 8, (0, 0, 255), -1)
+                cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+
+                distance = ((x2 - x1)**2 + (y2 - y1)**2) ** 0.5
+                if distance > 50:
+                    pyautogui.press("volumeup")
+                else:
+                    pyautogui.press("volumedown")
+
+        cv2.imshow("Hand Volume Control", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Button 2: Virtual Mouse
+def button2_click():
+    print('Virtual Mouse Activated')
+    cap = cv2.VideoCapture(0)
+    hands = mp.solutions.hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
+    draw = mp.solutions.drawing_utils
+    screen_w, screen_h = pyautogui.size()
+
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            break
+
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = hands.process(rgb)
+
+        if result.multi_hand_landmarks:
+            for hand_landmarks in result.multi_hand_landmarks:
+                draw.draw_landmarks(frame, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                index = hand_landmarks.landmark[8]
+                thumb = hand_landmarks.landmark[4]
+
+                ix, iy = int(index.x * w), int(index.y * h)
+                tx, ty = int(thumb.x * w), int(thumb.y * h)
+
+                screen_x = screen_w / w * ix
+                screen_y = screen_h / h * iy
+                pyautogui.moveTo(screen_x, screen_y)
+
+                if abs(iy - ty) < 50:
+                    pyautogui.click()
+                    pyautogui.sleep(1)
+
+        cv2.imshow("Virtual Mouse", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Button 3: Eye Controlled Mouse
+def button3_click():
+    print('Eye Controlled Mouse Activated')
+    cap = cv2.VideoCapture(0)
+    face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
+    screen_w, screen_h = pyautogui.size()
+
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            break
+
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = face_mesh.process(rgb)
+
+        if result.multi_face_landmarks:
+            landmarks = result.multi_face_landmarks[0].landmark
+
+            # Eye tracking
+            for id, lm in enumerate(landmarks[474:478]):
+                x, y = int(lm.x * w), int(lm.y * h)
+                cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
+                if id == 1:
+                    screen_x = screen_w / w * x
+                    screen_y = screen_h / h * y
+                    pyautogui.moveTo(screen_x, screen_y)
+
+            # Blink detection
+            left_eye = [landmarks[145], landmarks[159]]
+            for lm in left_eye:
+                x, y = int(lm.x * w), int(lm.y * h)
+                cv2.circle(frame, (x, y), 3, (0, 255, 255), -1)
+
+            if (left_eye[0].y - left_eye[1].y) < 0.008:
+                pyautogui.click()
+                pyautogui.sleep(1)
+
+        cv2.imshow("Eye Controlled Mouse", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Button 4: Capture Photo
+def button4_click():
+    print('Photo Capture Activated')
+    cap = cv2.VideoCapture(0)
+    count = 0
+    photo_path = None
+
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            break
+
+        cv2.imshow("Photo Capture", frame)
+        count += 1
+        if count == 50:
+            photo_path = "captured_photo.jpg"
+            cv2.imwrite(photo_path, frame)
+            print(f"Photo saved as {photo_path}")
+            break
+
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    if photo_path:
+        image = Image.open(photo_path)
+        image.show()
+
+# GUI Setup
+window = tk.Tk()
+window.title("Gesture Control GUI")
+
+tk.Button(window, text="Hand Volume Control", command=button1_click).pack(pady=5)
+tk.Button(window, text="Virtual Mouse", command=button2_click).pack(pady=5)
+tk.Button(window, text="Eye Controlled Mouse", command=button3_click).pack(pady=5)
+tk.Button(window, text="Capture Photo", command=button4_click).pack(pady=5)
+
+window.mainloop()
